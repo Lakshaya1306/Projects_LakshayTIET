@@ -1,7 +1,7 @@
 from Buses.serializers import BusSerializer, BookingSerializer, SeatsSerializer
 from Buses.models import Buses, Bookings, SeatsDetail
 
-from datetime import datetime
+from datetime import datetime, time
 
 from utility.functions import timeBasedData, priceBasedData, durationBasedData
 
@@ -53,12 +53,19 @@ class BusesData(APIView):
             source = request.query_params.get('source')
             destination = request.query_params.get('destination')
             date = request.query_params.get('date')
-        
-            request.session['date'] = date
+            
+            if date:
+                request.session['date'] = date
+            else:
+                return Response({'status':'Failure', 'message':"Date is required"}, status=status.HTTP_400_BAD_REQUEST)
         
             if source and destination:
-                busdata = Buses.objects.filter(source = source, destination = destination)
-            
+                currTime = datetime.now().time()
+                busdata = Buses.objects.filter(source = source, destination = destination, departuretime__gte = currTime)
+                isdata = busdata.exists()
+                if not isdata:
+                    return Response({'status':"Failure", 'message':"No Buses availabele"}, status = status.HTTP_204_NO_CONTENT)
+                
                 deptTimeRange = request.query_params.get('depttimerange')
                 arrivalTimeRange = request.query_params.get('arrivaltimerange')
                 sortVal = request.query_params.get('sorting')
@@ -134,6 +141,13 @@ class BusInfo(APIView):
         try:    
             with transaction.atomic():
                 data = request.data
+                
+                user = request.user
+                userId = user.id
+                busId = kwargs['id']
+                
+                data.update({'user':userId, 'bus':busId})
+                
                 serializer = BookingSerializer(data = data)
                 if serializer.is_valid():
                     serializer.save()
